@@ -24,8 +24,6 @@ def process_csv():
     err = copy_original_to_archives( source_file_path, destination_filepath )
     if err:
         email_admins( err ); sys.exit()
-    if err:
-        email_admins( err ); sys.exit()
     ( lines, err ) = get_lines()
     if err:
         email_admins( err ); sys.exit()
