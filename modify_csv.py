@@ -39,7 +39,8 @@ def copy_original_to_archives(source_file_path, destination_filepath ):
         Called by process_csv() """
     err = None
     try:
-        shutil.copy2( source_file_path, destination_filepath )
+        # shutil.copy2( source_file_path, destination_filepath )
+        shutil.copyfile( source_file_path, destination_filepath )
     except Exception as e:
         err = repr(e)
         log.exception( 'Problem with copy; admins will be emailed.' )
