@@ -1,4 +1,4 @@
-import datetime, json, logging, os, shutil, smtplib, sys
+import csv, datetime, json, logging, os, pprint, shutil, smtplib, sys
 from email.mime.text import MIMEText
 
 
@@ -15,6 +15,38 @@ log = logging.getLogger(__name__)
 log.debug( '\n\nstarting log\n============' )
 
 
+def csv_dct_play():
+    source_file_path = settings['FILEPATH_SOURCE']
+    destination_filepath = settings['FILEPATH_ARCHIVE_DESTINATION']
+
+    file_dct = {}
+    with open( source_file_path, 'r' ) as file_reader:
+        # dr = csv.DictReader( file_reader, delimiter=',', quoting=csv.QUOTE_NONE )
+
+        dialect = csv.Sniffer().sniff(file_reader.read(1024))
+        log.debug( f'dialect, ``{pprint.pformat(dialect.__dict__)}``' )
+
+        dr = csv.DictReader( file_reader, dialect=dialect )
+        log.debug( f'type(dr), ``{type(dr)}``' )
+        log.debug( f'dr, ``{pprint.pformat(dr)}``' )
+        file_dct = { row['Auth_ID']: row for row in dr }
+        # log.debug( f'x, ``{x}``' )
+        log.debug( f'aabbasi2_dct, ``{file_dct["aabbasi2"]}``')
+
+    rows_lst = [ row for row in file_dct.values() ]
+    log.debug( f'rows_lst[0:1], ``{rows_lst[0:1]}``' )
+
+    column_names = rows_lst[0].keys()
+    with open( destination_filepath, 'w' ) as file_writer:
+        dw = csv.DictWriter( file_writer, fieldnames=column_names )
+        dw.writeheader()
+        for row in rows_lst:
+            dw.writerow( row )
+
+
+# myDict = {x: x**2 for x in [1,2,3,4,5]}
+
+
 def process_csv():
     """ Manages processing.
         Called by ```if __name__ == '__main__':``` """
@@ -24,6 +56,9 @@ def process_csv():
     err = copy_original_to_archives( source_file_path, destination_filepath )
     if err:
         email_admins( err ); sys.exit()
+
+    # csv_dct =
+
     ( lines, err ) = get_lines()
     if err:
         email_admins( err ); sys.exit()
@@ -120,4 +155,5 @@ def email_admins( err ):
 
 
 if __name__ == '__main__':
-    process_csv()
+    # process_csv()
+    csv_dct_play()
