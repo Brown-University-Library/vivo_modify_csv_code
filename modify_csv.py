@@ -15,34 +15,38 @@ log = logging.getLogger(__name__)
 log.debug( '\n\nstarting log\n============' )
 
 
-def csv_dct_play():
+def csv_get_indices():
     source_file_path = settings['FILEPATH_SOURCE']
-    destination_filepath = settings['FILEPATH_ARCHIVE_DESTINATION']
+    # destination_filepath = settings['FILEPATH_ARCHIVE_DESTINATION']
 
     file_dct = {}
     with open( source_file_path, 'r' ) as file_reader:
         # dr = csv.DictReader( file_reader, delimiter=',', quoting=csv.QUOTE_NONE )
 
-        dialect = csv.Sniffer().sniff(file_reader.read(1024))
-        log.debug( f'dialect, ``{pprint.pformat(dialect.__dict__)}``' )
+        # dialect = csv.Sniffer().sniff(file_reader.read(1024))
+        # log.debug( f'dialect, ``{pprint.pformat(dialect.__dict__)}``' )
 
-        dr = csv.DictReader( file_reader, dialect=dialect )
+        dr = csv.DictReader( file_reader)#, dialect=dialect )
         log.debug( f'type(dr), ``{type(dr)}``' )
         log.debug( f'dr, ``{pprint.pformat(dr)}``' )
-        file_dct = { row['Auth_ID']: row for row in dr }
+        file_dct = { row['Auth_ID']: {'index': i, 'data': row} for i, row in enumerate(dr) }
         # log.debug( f'x, ``{x}``' )
-        log.debug( f'aabbasi2_dct, ``{file_dct["aabbasi2"]}``')
+        log.debug( f'aabbasi2_dct, ``{file_dct["aabbasi2"]["data"]}``')
 
-    rows_lst = [ row for row in file_dct.values() ]
-    log.debug( f'rows_lst[0:1], ``{rows_lst[0:1]}``' )
+    ids = [ i['auth_id'] for i in settings['CHANGES'] ]
+    lookup_indices = [ file_dct[i]['index'] for i in ids ]
 
-    column_names = rows_lst[0].keys()
-    with open( destination_filepath, 'w' ) as file_writer:
-        dw = csv.DictWriter( file_writer, fieldnames=column_names )
-        dw.writeheader()
-        for row in rows_lst:
-            dw.writerow( row )
+    # rows_lst = [ row for row in file_dct.values() ]
+    # log.debug( f'rows_lst[0:1], ``{rows_lst[0:1]}``' )
 
+    # column_names = rows_lst[0].keys()
+    # with open( destination_filepath, 'w' ) as file_writer:
+    #     dw = csv.DictWriter( file_writer, fieldnames=column_names )
+    #     dw.writeheader()
+    #     for row in rows_lst:
+    #         dw.writerow( row )
+
+    return lookup_indices
 
 # myDict = {x: x**2 for x in [1,2,3,4,5]}
 
@@ -156,4 +160,4 @@ def email_admins( err ):
 
 if __name__ == '__main__':
     # process_csv()
-    csv_dct_play()
+    print(csv_get_indices())
