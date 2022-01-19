@@ -38,6 +38,8 @@ def process_csv():
     ## update lines -----------------------------
     ( updated_lines, err ) = update_lines( lines )
     if err:  # notify admins, but continue processing
+        if type( err ) == list:
+            err = repr( err )
         email_admins( err )
     ## write new file ---------------------------
     err = write_file( updated_lines )
@@ -122,7 +124,7 @@ def update_lines( lines ):
                 err.append( f' no target for ``{change_dct["auth_id"]}`` found')
             log.debug( f'after, ``{evaluation_line}``')
         updated_lines = lines
-        err = repr(err)
+        # err = repr(err)
     except Exception as e:
         err = repr(e)
         log.exception( 'Problem updating lines; admins will be emailed.' )
