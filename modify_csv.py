@@ -15,98 +15,38 @@ log = logging.getLogger(__name__)
 log.debug( '\n\nstarting log\n============' )
 
 
-# def csv_get_indices():
-#     source_file_path = settings['FILEPATH_SOURCE']
-#     # destination_filepath = settings['FILEPATH_ARCHIVE_DESTINATION']
-
-#     file_dct = {}
-#     with open( source_file_path, 'r' ) as file_reader:
-#         # dr = csv.DictReader( file_reader, delimiter=',', quoting=csv.QUOTE_NONE )
-
-#         # dialect = csv.Sniffer().sniff(file_reader.read(1024))
-#         # log.debug( f'dialect, ``{pprint.pformat(dialect.__dict__)}``' )
-
-#         dr = csv.DictReader( file_reader)#, dialect=dialect )
-#         # log.debug( f'type(dr), ``{type(dr)}``' )
-#         # log.debug( f'dr, ``{pprint.pformat(dr)}``' )
-#         file_dct = { row['Auth_ID']: {'index': i, 'data': row} for i, row in enumerate(dr) }
-#         # log.debug( f'file_dct, ``\n{pprint.pformat(file_dct)[0:5000]}``' )
-#         # log.debug( f'x, ``{x}``' )
-#         log.debug( f'aabbasi2_dct, ``{file_dct["aabbasi2"]["data"]}``')
-
-#     ids = [ i['auth_id'] for i in settings['CHANGES'] ]
-#     log.debug( f'ids, ``{ids}``')
-#     lookup_indices = [ file_dct[i]['index'] for i in ids ]
-
-#     return lookup_indices
-
-# myDict = {x: x**2 for x in [1,2,3,4,5]}
-
-
-def set_indices():
-    source_file_path = settings['FILEPATH_SOURCE']
-    # destination_filepath = settings['FILEPATH_ARCHIVE_DESTINATION']
-
-    file_dct = {}
-    with open( source_file_path, 'r' ) as file_reader:
-        # dr = csv.DictReader( file_reader, delimiter=',', quoting=csv.QUOTE_NONE )
-
-        # dialect = csv.Sniffer().sniff(file_reader.read(1024))
-        # log.debug( f'dialect, ``{pprint.pformat(dialect.__dict__)}``' )
-
-        dr = csv.DictReader( file_reader)#, dialect=dialect )
-        # log.debug( f'type(dr), ``{type(dr)}``' )
-        # log.debug( f'dr, ``{pprint.pformat(dr)}``' )
-        file_dct = { row['Auth_ID']: {'index': i, 'data': row} for i, row in enumerate(dr) }
-        # log.debug( f'file_dct, ``\n{pprint.pformat(file_dct)[0:5000]}``' )
-        # log.debug( f'x, ``{x}``' )
-        log.debug( f'aabbasi2_dct, ``{file_dct["aabbasi2"]["data"]}``')
-
-    for change_dct in settings['CHANGES']:
-        change_auth_id = change_dct['auth_id']
-        index = file_dct[change_auth_id]['index']
-        change_dct['idx'] = index
-
-    # ids = [ i['auth_id'] for i in settings['CHANGES'] ]
-    # log.debug( f'ids, ``{ids}``')
-    # lookup_indices = [ file_dct[i]['index'] for i in ids ]
-
-    return
-
-
-
 def process_csv():
     """ Manages processing.
         Called by ```if __name__ == '__main__':``` """
-    # source_file_path = 'foo'
     source_file_path = settings['FILEPATH_SOURCE']
     destination_filepath = settings['FILEPATH_ARCHIVE_DESTINATION']
-
-    err = copy_original_to_archives( source_file_path, destination_filepath )
+    ## backup original --------------------------
+    err = backup_original( source_file_path, destination_filepath )
     if err:
-        email_admins( err ); sys.exit()
-
+        email_admins( err )
+        sys.exit()
+    ## load source-data -------------------------
     ( lines, err ) = get_lines()
     if err:
-        email_admins( err ); sys.exit()
-
-
-    set_indices()
-
-
-    ( updated_lines, err ) = update_lines( lines )
-
-    log.debug( 'hereA')
+        email_admins( err )
+        sys.exit()
+    ## update each change-dict w/index ----------
+    err = set_indices()
     if err:
-        log.debug( 'hereB')
-        email_admins( repr(err) )
-    log.debug( 'hereC')
-
+        email_admins( err )
+        sys.exit()
+    ## update lines -----------------------------
+    ( updated_lines, err ) = update_lines( lines )
+    if err:  # notify admins, but continue processing
+        email_admins( err )
+    ## write new file ---------------------------
     err = write_file( updated_lines )
     if err:
-        email_admins( err ); sys.exit()
+        email_admins( err )
+        sys.exit()
 
-def copy_original_to_archives(source_file_path, destination_filepath ):
+
+def backup_original( source_file_path, destination_filepath ):
     """ Archives original before doing anything else.
         Called by process_csv() """
     err = None
@@ -118,6 +58,7 @@ def copy_original_to_archives(source_file_path, destination_filepath ):
         log.exception( 'Problem with copy; admins will be emailed.' )
     # log.debug( f'err, ``{err}``' )
     return err
+
 
 def get_lines():
     """ Opens file & grabs text.
@@ -133,80 +74,60 @@ def get_lines():
         return err
     return ( lines, err )
 
+
+def set_indices():
+    """ Updates each change-dict with the target line-index...
+        ...by first creating a dict from the source-file, where the key is the row's auth-id,
+        ...and the value is a dict of index and data elements.
+        Then iterates through the change-dicts, looking up the auth-id and adding the row-index to the change-dict.
+        Called by process_csv() """
+    err = None
+    try:
+        source_file_path = settings['FILEPATH_SOURCE']
+        file_dct = {}
+        with open( source_file_path, 'r' ) as file_reader:
+            dr = csv.DictReader( file_reader)
+            file_dct = { row['Auth_ID']: {'index': i, 'data': row} for i, row in enumerate(dr) }
+            # log.debug( f'file_dct, ``\n{pprint.pformat(file_dct)[0:5000]}``' )
+        for change_dct in settings['CHANGES']:
+            change_auth_id = change_dct['auth_id']
+            index = file_dct[change_auth_id]['index']
+            change_dct['idx'] = index
+    except Exception as e:
+        err = repr(e)
+        log.exception( 'Problem assigning row indices; admins will be emailed.' )
+    return err
+
+
 def update_lines( lines ):
-    """ Updates data.
+    """ Updates proper row for each change-dct entry.
         Called by process_csv() """
     assert type( lines ) == list
     ( updated_lines, err ) = ( [], [] )
-
-    for change_dct in settings['CHANGES']:
-        log.debug( f'changing ``{change_dct["auth_id"]}``' )
-        lookup_index = change_dct['idx']
-        log.debug( f'lookup_index, `{lookup_index}``')
-
-        trgt = change_dct['target']
-        rplcmnt = change_dct['replacement']
-
-        evaluation_line = lines[lookup_index+1]
-        log.debug( f'before, ``{evaluation_line}``')
-
-        if trgt in evaluation_line:
-            evaluation_line = evaluation_line.replace( trgt, rplcmnt )
-            lines[lookup_index+1] = evaluation_line
-        else:
-            err.append( f' no target for ``{change_dct["auth_id"]}`` found')
-
-        log.debug( f'after, ``{evaluation_line}``')
-        log.debug( f'after idx, ``{lines[lookup_index+1]}``')
-
-
-    updated_lines = lines
-
+    try:
+        for change_dct in settings['CHANGES']:
+            log.debug( f'changing ``{change_dct["auth_id"]}``' )
+            ## setup change vars --------------------
+            lookup_index = change_dct['idx']
+            trgt = change_dct['target']
+            rplcmnt = change_dct['replacement']
+            ## get line to update -------------------
+            evaluation_line = lines[lookup_index+1]
+            log.debug( f'before, ``{evaluation_line}``')
+            ## update -------------------------------
+            if trgt in evaluation_line:
+                evaluation_line = evaluation_line.replace( trgt, rplcmnt )
+                lines[lookup_index+1] = evaluation_line
+            else:
+                err.append( f' no target for ``{change_dct["auth_id"]}`` found')
+            log.debug( f'after, ``{evaluation_line}``')
+        updated_lines = lines
+        err = repr(err)
+    except Exception as e:
+        err = repr(e)
+        log.exception( 'Problem updating lines; admins will be emailed.' )
     return ( updated_lines, err )
 
-        # log.debug( f'before, ``{lines[lookup_index+1]}``' )
-        # lines[lookup_index+1] = lines[lookup_index+1].replace( change_dct['target'], change_dct['replacement'] )
-        # log.debug( f'after, ``{lines[lookup_index+1]}``' )
-
-
-    # AUTH_ID = settings['CHANGES'][0]['auth_id']
-    # SEARCH_TEXT = settings['CHANGES'][0]['target']
-    # REPLACE_TEXT = settings['CHANGES'][0]['replacement']
-    # found_flag = 'init'
-    # for line in lines:
-    #     if AUTH_ID in line and SEARCH_TEXT in line:
-    #         updated_line = line.replace( SEARCH_TEXT, REPLACE_TEXT )
-    #         updated_lines.append( updated_line )
-    #         found_flag = 'found_match'
-    #     else:
-    #         updated_lines.append( line )
-    # if found_flag == 'init':
-    #     err = 'odd; no match found'
-
-    return ( updated_lines, err )
-
-
-
-
-# def update_lines( lines ):
-#     """ Updates data.
-#         Called by process_csv() """
-#     assert type( lines ) == list
-#     ( updated_lines, err ) = ( [], None )
-#     AUTH_ID = settings['CHANGES'][0]['auth_id']
-#     SEARCH_TEXT = settings['CHANGES'][0]['target']
-#     REPLACE_TEXT = settings['CHANGES'][0]['replacement']
-#     found_flag = 'init'
-#     for line in lines:
-#         if AUTH_ID in line and SEARCH_TEXT in line:
-#             updated_line = line.replace( SEARCH_TEXT, REPLACE_TEXT )
-#             updated_lines.append( updated_line )
-#             found_flag = 'found_match'
-#         else:
-#             updated_lines.append( line )
-#     if found_flag == 'init':
-#         err = 'odd; no match found'
-#     return ( updated_lines, err )
 
 def write_file( updated_lines ):
     """ Writes new file.
@@ -222,6 +143,7 @@ def write_file( updated_lines ):
         log.exception( 'Problem writing file; admins will be emailed.' )
     return err
 
+
 def email_admins( err ):
     """ Sends error mail.
         Called by process_csv() """
@@ -233,7 +155,7 @@ def email_admins( err ):
     EMAIL_RECIPIENTS = settings['MAIL_RECIPIENTS']
     try:
         s = smtplib.SMTP( EMAIL_HOST, EMAIL_PORT )
-        body = f'datetime: `{str(datetime.datetime.now())}`\n\nerror...`\n\n{err}[END]'
+        body = f'datetime: ``{str(datetime.datetime.now())}``\n\nerror...\n``{err}``\n\n[END]'
         eml = MIMEText( f'{body}' )
         eml['Subject'] = 'error in vivo modify_csv.py processing'
         eml['From'] = EMAIL_FROM
@@ -248,4 +170,3 @@ def email_admins( err ):
 
 if __name__ == '__main__':
     process_csv()
-    # print(csv_get_indices())
